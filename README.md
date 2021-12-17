@@ -7,7 +7,22 @@ Utility script to tail one or more container logs to file(s)
 log viewer software such as lnav.
 * Logs can be retained or just written to a temporary directory
 
-###Usage
+### Install k8s-tail
+1. Clone the k8s_tail repository
+> git clone git@github.com:timothy-netapp/k8s-tail.git
+
+2. Change directory into k8s-tail
+> cd k8s-tail
+
+3. Install using pip
+> pip install -e .
+
+### Install lnav (optional)
+1) brew install lnav
+2) Copy the files from https://github.com/timothy-netapp/lnav-formats
+into ~/.lnav/formats/installed/ directory
+
+### Usage
 * Provide a top level directory to save the log files
 either through environment variable LOG_DIRECTORY or
 by command line option -l, --logdir
@@ -23,7 +38,7 @@ temporary directory, view the logs, then cleanup the log
 files when the viewer exists. The -v, --view option will be
 automatically enabled when using this option.
 
-###Examples
+### Examples
 Below are some examples. use the --help option for more
 details
 
