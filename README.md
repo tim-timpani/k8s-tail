@@ -46,6 +46,20 @@ automatically enabled when using this option.
 Below are some examples. use the --help option for more
 details
 
+#### KUBECONFIG
+k8s-tail will use the kubeconfig specified by the KUBECONFIG
+environement variable (or ~/.kube/config if not specified).
+To override the default kubeconfig, use the -k/--kubeconfig
+parameter
+
+#### Log Location
+By default, k8s-tail will save the logs.  Use the LOG_DIRECTORY
+environement variable to specify the location.  Override it by
+using the -l/--logdir parameter.  Set the logdir to - (dash)
+to use a temp directory.  This requires lnav to be installed
+to view the logs.  When lnav exits, the logs will be deleted.
+See below for examples.
+
 #### Retain logs
 To retain all the logs from all containers in the database
 namespace into a subdirectory under ~/logs. The current
