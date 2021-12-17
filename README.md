@@ -37,6 +37,10 @@ stop the log tailing when the viewer exits.
 temporary directory, view the logs, then cleanup the log
 files when the viewer exists. The -v, --view option will be
 automatically enabled when using this option.
+* Supports multiple namespaces and pod/container regexes (AND)
+    * >k8s-tail -n trident -c main provisioner -p k6k psd -l ~/demo-logs
+      
+    * >k8s-tail -l ~/demo-logs -n trident mdb-ns
 
 ### Examples
 Below are some examples. use the --help option for more
