@@ -30,6 +30,41 @@ class ContainerSpec:
         return f"{self.namespace}_{self.pod}_{self.container}.log"
 
 
+class SearchSpec:
+    """Class to handle search parameters and search methods for container selection"""
+
+    def __init__(self, namespaces: (None, list) = None, pods: (None, list) = None, containers: (None, list) = None):
+        self.namespaces = namespaces or []
+        pod_regex_strings = pods or []
+        self.pod_regexes = [re.compile(p) for p in pod_regex_strings]
+        container_regex_strings = containers or []
+        self.container_regexes = [re.compile(c) for c in container_regex_strings]
+
+    def match(self, spec: ContainerSpec) -> bool:
+
+        if spec.namespace not in self.namespaces:
+            return False
+
+        # Check if pod matches only if we have pod regexes to match against
+        if self.pod_regexes:
+            for regex in self.pod_regexes:
+                if regex.search(spec.pod):
+                    break
+            else:
+                return False
+
+        # If no container regexes, then just return True
+        if not self.container_regexes:
+            return True
+
+        # Check through the container regexes
+        for re_container in self.container_regexes:
+            if re_container.search(spec.container):
+                return True
+
+        return False
+
+
 def run_kubectl_bg(command_args: list[str], kubeconfig: str = DEF_KUBECONFIG,
                    backround_to_file: str = "/dev/null") -> subprocess.Popen:
     """
@@ -76,69 +111,21 @@ def run_kubectl(command_args: list[str], kubeconfig: str = DEF_KUBECONFIG) -> st
     return result.stdout.decode('utf-8')
 
 
-def get_containers(pod_regex: list[str], container_regex: list[str] = ".",
-                   namespaces: list[str] = "", kubeconfig: str = DEF_KUBECONFIG) -> list[ContainerSpec]:
-    """
-    Uses kubectl command to get containers matching the criteria
-    :param pod_regex: regex string to match pod name
-    :param container_regex: regex string to match container name
-    :param namespaces: specify namespace, only pods from this namespace will be included
-    :param kubeconfig: path to kubeconfig file
-    :return: list of ContainerSpec objects
-    """
-    pods = []
+def get_containers(search_spec: SearchSpec, kubeconfig: str = DEF_KUBECONFIG) -> list[ContainerSpec]:
     containers = []
-    command_args = ["get", "pod", "-o", "yaml"]
-    if namespaces:
-        for namespace in namespaces:
-            pod_output = run_kubectl(
-                command_args=command_args + ["-n", namespace],
-                kubeconfig=kubeconfig
-            )
-            pods.extend(yaml.safe_load(pod_output)["items"])
-    else:
-        command_args.append("-A")
-        pod_output = run_kubectl(command_args=command_args, kubeconfig=kubeconfig)
-        pods.extend(yaml.safe_load(pod_output)["items"])
+    command_args = ["get", "pod", "-A", "-o", "yaml"]
+    pod_output = run_kubectl(command_args=command_args, kubeconfig=kubeconfig)
+    pods = yaml.safe_load(pod_output)["items"]
     for pod in pods:
         for container in pod["spec"]["containers"]:
-            if match_container(
-                pod_name=pod["metadata"]["name"],
-                container_name=container["name"],
-                pod_regex=pod_regex,
-                container_regex=container_regex
-            ):
-                containers.append(ContainerSpec(
-                    namespace=pod["metadata"]["namespace"],
-                    pod=pod["metadata"]["name"],
-                    container=container["name"]
-                ))
-                continue
+            container_spec = ContainerSpec(
+                namespace=pod["metadata"]["namespace"],
+                pod=pod["metadata"]["name"],
+                container=container["name"]
+            )
+            if search_spec.match(container_spec):
+                containers.append(container_spec)
     return containers
-
-
-def match_container(pod_name: str, container_name: str, pod_regex: list[str], container_regex: list[str]) -> bool:
-    re_pods = [re.compile(p) for p in pod_regex]
-    re_containers = [re.compile(c) for c in container_regex]
-
-    # Check if pod matches only if we have pod regexes to match against
-    if re_pods:
-        for re_pod in re_pods:
-            if re_pod.search(pod_name):
-                break
-        else:
-            return False
-
-    # If no container regexes, then just return True
-    if not re_containers:
-        return True
-
-    # Check through the container regexes
-    for re_container in re_containers:
-        if re_container.search(container_name):
-            return True
-
-    return False
 
 
 def tail_logs(log_dir: str, containers: list[ContainerSpec], kubeconfig: str = DEF_KUBECONFIG, view: bool = False):
@@ -225,12 +212,18 @@ def main():
     logger.info(f"Using kubeconfig at {kubeconfig}")
 
     #
+    # Create a search spec based on command line args
+    search_spec = SearchSpec(
+        namespaces=args.namespace,
+        pods=args.pod,
+        containers=args.container
+    )
+
+    #
     # Get all matching containers
     logger.info("Getting containers")
     containers = get_containers(
-        pod_regex=args.pod,
-        container_regex=args.container,
-        namespaces=args.namespace,
+        search_spec=search_spec,
         kubeconfig=kubeconfig
     )
     if len(containers) < 1:
