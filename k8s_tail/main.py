@@ -168,13 +168,13 @@ def tail_logs(log_dir: str, containers: list[ContainerSpec],
 
     if args.view:
         os.system(f"{LOG_VIEWER} {log_dir}")
-        return
     else:
         ans = "N"
         while ans.lower() != "stop":
             ans = input("Log tails running. Enter stop when finished: ")
 
     # Kill all the tailing procs
+    logger.info("Stopping log capture processes")
     for proc in procs:
         proc.kill()
 
@@ -235,7 +235,10 @@ def main():
         log_level = logging.DEBUG
     else:
         log_level = logging.INFO
-    logging.basicConfig(level=log_level)
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
 
     kubeconfig = os.path.expanduser(args.kubeconfig)
     logger.info(f"Using kubeconfig at {kubeconfig}")
@@ -264,12 +267,12 @@ def main():
         temp_dir = tempfile.TemporaryDirectory()
         log_dir = temp_dir.name
         args.view = True  # Force view to true, otherwise we accomplish nothing if it's false
-        logging.info(f"Tailing logs into temp directory {log_dir}")
+        logger.info(f"Tailing logs into temp directory {log_dir}")
     else:
         temp_dir = None
         log_dir = os.path.join(os.path.expanduser(args.logdir), TIME_STAMP)
         os.mkdir(log_dir)
-        logging.info(f"Tailing logs into directory {log_dir}")
+        logger.info(f"Tailing logs into directory {log_dir}")
 
     try:
         tail_logs(
@@ -280,10 +283,10 @@ def main():
         )
     finally:
         if temp_dir is not None:
-            logging.info(f"Cleaning up temp directory {temp_dir.name}")
+            logger.info(f"Cleaning up temp directory {temp_dir.name}")
             temp_dir.cleanup()
         else:
-            logging.info(f"Logs retained in directory {log_dir}")
+            logger.info(f"Logs retained in directory {log_dir}")
 
 
 if __name__ == "__main__":
