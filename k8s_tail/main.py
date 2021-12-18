@@ -41,6 +41,11 @@ class SearchSpec:
         self.container_regexes = [re.compile(c) for c in container_regex_strings]
 
     def match(self, spec: ContainerSpec) -> bool:
+        """
+        Performs match against a Kubernetes container
+        :param spec: ContainerSpec object describing the Kubernetes container
+        :return: bool
+        """
 
         if spec.namespace not in self.namespaces:
             return False
@@ -112,6 +117,12 @@ def run_kubectl(command_args: list[str], kubeconfig: str = DEF_KUBECONFIG) -> st
 
 
 def get_containers(search_spec: SearchSpec, kubeconfig: str = DEF_KUBECONFIG) -> list[ContainerSpec]:
+    """
+    Retrieve Kubernetes containers matching the desired search specification
+    :param search_spec: SearchSpec object
+    :param kubeconfig: path to kubeconfig file
+    :return: list of ContainerSpec objects
+    """
     containers = []
     command_args = ["get", "pod", "-A", "-o", "yaml"]
     pod_output = run_kubectl(command_args=command_args, kubeconfig=kubeconfig)
@@ -128,26 +139,34 @@ def get_containers(search_spec: SearchSpec, kubeconfig: str = DEF_KUBECONFIG) ->
     return containers
 
 
-def tail_logs(log_dir: str, containers: list[ContainerSpec], kubeconfig: str = DEF_KUBECONFIG, view: bool = False):
+def tail_logs(log_dir: str, containers: list[ContainerSpec],
+              args: argparse.Namespace, kubeconfig: str = DEF_KUBECONFIG):
     """
     Tail all the container logs.
     Uses subprocess.Popen to run several tail commands in the background. If viewing the logs, the tail procs
     will be killed once the user quits the viewer. Otherwise, the user must enter "stop" to stop the tail procs
     :param log_dir: Path to where the log files will be written
     :param containers: List of ContainerSpec objects
+    :param args: argparse namespace (command line options).
     :param kubeconfig: Path to kubeconfig file
-    :param view: bool to launch the viewer
     :return:
     """
+
+    optional_args = []
+    if args.since:
+        optional_args.extend(["--since", args.since])
+    if args.tail:
+        optional_args.extend(["--tail", args.tail])
+
     procs: list[subprocess.Popen] = []
     for container in containers:
         log_file = os.path.join(log_dir, container.file_path)
         logger.info(f"Starting tail for log {container.file_path}")
-        cmd = ["logs", "-f", container.pod, "-c", container.container, "-n", container.namespace]
+        cmd = ["logs", "-f", container.pod, "-c", container.container, "-n", container.namespace] + optional_args
         proc = run_kubectl_bg(command_args=cmd, kubeconfig=kubeconfig, backround_to_file=log_file)
         procs.append(proc)
 
-    if view:
+    if args.view:
         os.system(f"{LOG_VIEWER} {log_dir}")
         return
     else:
@@ -190,6 +209,16 @@ def main():
         nargs="*",
         default=[],
         help=f"Regex string(s) to match container name. defaults to all containers"
+    )
+    parser.add_argument(
+        "--since", "-S",
+        required=False,
+        help=f"Logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs"
+    )
+    parser.add_argument(
+        "--tail", "-T",
+        required=False,
+        help=f"Lines of recent log file to display"
     )
     parser.add_argument(
         "--view", "-v",
@@ -246,8 +275,8 @@ def main():
         tail_logs(
             log_dir=log_dir,
             containers=containers,
-            kubeconfig=kubeconfig,
-            view=args.view
+            args=args,
+            kubeconfig=kubeconfig
         )
     finally:
         if temp_dir is not None:
